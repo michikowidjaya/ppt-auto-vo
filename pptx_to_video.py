@@ -146,7 +146,6 @@ class PPTXToVideoConverter:
             if hasattr(fill, 'type') and fill.type is not None:
                 fill_type = fill.type
                 
-                # MSO_FILL_TYPE.SOLID = 1
                 if fill_type == MSO_FILL_TYPE.SOLID or (hasattr(fill, 'fore_color') and fill.fore_color):
                     try:
                         # Solid color fill
@@ -157,14 +156,10 @@ class PPTXToVideoConverter:
                         # If color extraction fails, use default
                         pass
                 
-                # MSO_FILL_TYPE.PICTURE = 6
                 elif fill_type == MSO_FILL_TYPE.PICTURE:
-                    try:
-                        # Picture fill - try to extract the image
-                        # This is complex and may not work in all cases
-                        pass
-                    except Exception as e:
-                        pass
+                    # Picture fill backgrounds are not yet supported
+                    # Falls through to default white background
+                    pass
             
             # If following master background, try to get from master
             if slide.follow_master_background and prs.slide_masters:
@@ -214,33 +209,49 @@ class PPTXToVideoConverter:
         scale_y = img_height / slide_height
         
         # Try to load a font, fallback to default if not available
+        font_large = None
+        font_medium = None
+        font_small = None
+        
         try:
             # Try common font paths for different operating systems
-            font_paths = [
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux (Debian/Ubuntu)
-                "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",  # Linux (RHEL/Fedora)
-                "C:\\Windows\\Fonts\\arialbd.ttf",  # Windows
-                "/Library/Fonts/Arial Bold.ttf",  # macOS
-                "/System/Library/Fonts/Helvetica.ttc",  # macOS fallback
+            font_configs = [
+                # Linux (Debian/Ubuntu)
+                {
+                    'bold': "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                    'regular': "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+                },
+                # Linux (RHEL/Fedora)
+                {
+                    'bold': "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
+                    'regular': "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf"
+                },
+                # Windows
+                {
+                    'bold': "C:\\Windows\\Fonts\\arialbd.ttf",
+                    'regular': "C:\\Windows\\Fonts\\arial.ttf"
+                },
+                # macOS
+                {
+                    'bold': "/Library/Fonts/Arial Bold.ttf",
+                    'regular': "/Library/Fonts/Arial.ttf"
+                },
             ]
             
-            font_large = None
-            for font_path in font_paths:
+            for config in font_configs:
                 try:
-                    font_large = ImageFont.truetype(font_path, 48)
-                    # If successful, use the same font family for other sizes
-                    base_font_path = font_path.replace("-Bold", "").replace("bd", "")
-                    font_medium = ImageFont.truetype(base_font_path, 32)
-                    font_small = ImageFont.truetype(base_font_path, 24)
+                    font_large = ImageFont.truetype(config['bold'], 48)
+                    font_medium = ImageFont.truetype(config['regular'], 32)
+                    font_small = ImageFont.truetype(config['regular'], 24)
                     break
-                except:
+                except (OSError, IOError):
                     continue
             
-            # If no font found, use default
+            # If no font found, raise to use default
             if font_large is None:
                 raise Exception("No TrueType font found")
                 
-        except:
+        except Exception:
             # Fallback to default font
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
@@ -285,7 +296,7 @@ class PPTXToVideoConverter:
                         try:
                             bbox = draw.textbbox((0, 0), test_line, font=font)
                             test_width = bbox[2] - bbox[0]
-                        except:
+                        except (AttributeError, TypeError):
                             # Fallback for older Pillow versions
                             test_width = len(test_line) * 10
                         
@@ -307,7 +318,7 @@ class PPTXToVideoConverter:
                         try:
                             bbox = draw.textbbox((0, 0), line, font=font)
                             line_height = bbox[3] - bbox[1]
-                        except:
+                        except (AttributeError, TypeError):
                             line_height = 40
                         line_y += line_height + 5  # Line spacing
                         
