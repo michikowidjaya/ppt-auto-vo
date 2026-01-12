@@ -6,11 +6,10 @@ Implementasi pipeline untuk mengonversi file PPTX atau PDF menjadi video slidesh
 
 - ✅ **Support PDF** - Konversi file PDF menjadi video dengan voiceover
 - ✅ **Support PPTX** - Konversi presentasi PowerPoint menjadi video
-- ✅ Ekstraksi teks dari setiap slide/page menggunakan `python-pptx` atau `PyPDF2`
-- ✅ Ekstraksi gambar dari slide (jika ada, untuk PPTX)
-- ✅ **Ekstraksi background dinamis** - Ekstrak background (warna atau gambar) dari setiap slide (untuk PPTX)
-- ✅ **Render teks di atas background** - Overlay teks shapes pada background menggunakan Pillow (untuk PPTX)
-- ✅ Konversi slide/page ke format PNG
+- ✅ **RAW PNG Extraction** - Ekstraksi gambar slide asli (RAW) dari PDF menggunakan pdftoppm
+- ✅ **Unified Pipeline** - Semua input (PPTX/PDF) diproses melalui jalur yang sama: PDF → RAW PNG → Video
+- ✅ Ekstraksi teks dari setiap slide/page menggunakan `PyPDF2`
+- ✅ Konversi slide/page ke format PNG berkualitas tinggi (300 DPI)
 - ✅ Generate audio voiceover menggunakan Google TTS (`gTTS`)
 - ✅ Gabungkan slide dan audio menjadi video per slide
 - ✅ Konsolidasikan semua video menjadi satu file output MP4
@@ -20,7 +19,7 @@ Implementasi pipeline untuk mengonversi file PPTX atau PDF menjadi video slidesh
 ### System Dependencies
 
 1. **Python 3.8+**
-2. **FFmpeg** - untuk encoding video
+2. **FFmpeg** - **REQUIRED** untuk encoding video
    ```bash
    # Ubuntu/Debian
    sudo apt install ffmpeg
@@ -32,7 +31,7 @@ Implementasi pipeline untuk mengonversi file PPTX atau PDF menjadi video slidesh
    # Download dari https://ffmpeg.org/download.html
    ```
 
-3. **pdftoppm (Poppler)** - **REQUIRED** untuk konversi PDF
+3. **pdftoppm (Poppler)** - **REQUIRED** untuk ekstraksi RAW PNG dari PDF
    ```bash
    # Ubuntu/Debian
    sudo apt install poppler-utils
@@ -41,10 +40,10 @@ Implementasi pipeline untuk mengonversi file PPTX atau PDF menjadi video slidesh
    brew install poppler
    ```
 
-4. **LibreOffice** (opsional, untuk rendering PPTX slide yang lebih baik)
+4. **LibreOffice** - **REQUIRED** untuk konversi PPTX ke PDF
    ```bash
    # Ubuntu/Debian
-   sudo apt install libreoffice
+   sudo apt install libreoffice-writer libreoffice-impress
    
    # macOS
    brew install --cask libreoffice
@@ -59,10 +58,8 @@ pip install -r requirements.txt
 ```
 
 Dependencies yang dibutuhkan:
-- `python-pptx`: untuk parsing dan ekstraksi PPTX
 - `PyPDF2`: untuk ekstraksi teks dari PDF
 - `gTTS`: untuk text-to-speech (Google TTS)
-- `Pillow`: untuk manipulasi gambar
 
 ## Instalasi
 
@@ -87,22 +84,25 @@ Dependencies yang dibutuhkan:
 ```
 project-root/
 ├── input/
-│   ├── slides.pptx          # File PPTX input (atau)
-│   ├── Tugas.pdf             # File PDF input
+│   ├── file.pptx             # File PPTX input (atau)
+│   ├── document.pdf          # File PDF input
 │   └── INSTRUKSI.txt         # (opsional) instruksi tambahan
 ├── temp/                     # Folder sementara (auto-generated)
+│   ├── pdf/
+│   │   └── input.pdf        # PDF source (converted dari PPTX atau copied dari input)
 │   ├── slides/
-│   │   ├── slide001.png
-│   │   ├── slide002.png
+│   │   ├── slide-1.png      # RAW PNG images dari PDF
+│   │   ├── slide-2.png
 │   │   └── ...
 │   ├── audio/
-│   │   ├── slide001.mp3
-│   │   ├── slide002.mp3
+│   │   ├── slide-1.mp3      # TTS audio untuk setiap slide
+│   │   ├── slide-2.mp3
 │   │   └── ...
-│   └── slide_videos/
-│       ├── slide001.mp4
-│       ├── slide002.mp4
-│       └── ...
+│   ├── slide_videos/
+│   │   ├── slide-1.mp4      # Video individual per slide
+│   │   ├── slide-2.mp4
+│   │   └── ...
+│   └── slides_list.txt      # Concatenation list untuk FFmpeg
 ├── output/
 │   └── output.mp4            # Video output final
 ├── pptx_to_video.py          # Script utama
@@ -158,83 +158,79 @@ python pptx_to_video.py --help
   - `id`: Indonesian
   - `es`: Spanish
   - dll. (lihat [gTTS supported languages](https://gtts.readthedocs.io/en/latest/module.html#languages-gtts-lang))
-- `--background`, `-b`: **(Deprecated)** No longer used - backgrounds are now extracted from each slide (PPTX only)
+- `--background`, `-b`: **(Deprecated)** No longer used
 - `--clean`: Clean temporary directory before processing
 
 ## Pipeline Flow
 
-### For PDF Files:
+**Unified Pipeline untuk PPTX dan PDF:**
 
-### 1. Ekstraksi Teks dari PDF
-- Menggunakan `PyPDF2` untuk membaca file PDF
-- Ekstraksi teks dari setiap page
+```
+PPTX/PDF Input
+    ↓
+[Step 1] Convert to PDF (if PPTX) or Copy (if PDF)
+    ↓ → temp/pdf/input.pdf
+[Step 2] Extract Text from PDF (PyPDF2)
+    ↓
+[Step 3] Extract RAW PNG from PDF (pdftoppm, 300 DPI)
+    ↓ → temp/slides/slide-1.png, slide-2.png, ...
+[Step 4] Generate TTS Audio (gTTS)
+    ↓ → temp/audio/slide-1.mp3, slide-2.mp3, ...
+[Step 5] Combine PNG + Audio (FFmpeg)
+    ↓ → temp/slide_videos/slide-1.mp4, slide-2.mp4, ...
+[Step 6] Concatenate Videos (FFmpeg concat)
+    ↓
+output/output.mp4
+```
 
-### 2. Konversi PDF ke PNG
-- Menggunakan `pdftoppm` untuk convert setiap page ke PNG
-- Resolusi tinggi (300 DPI)
-- PNG disimpan di `temp/slides/`
+### Detail Setiap Step:
 
-### 3. Generate Audio (TTS)
-- Menggunakan `gTTS` untuk convert teks ke MP3
-- Audio disimpan di `temp/audio/`
-- Jika page tidak ada teks, generate audio default "Page N"
-
-### 4. Combine Page PNG + Audio
-- Menggunakan FFmpeg untuk menggabungkan page PNG dengan audio:
+### 1. Convert to PDF (untuk PPTX) / Copy PDF (untuk PDF)
+- **PPTX**: Menggunakan LibreOffice headless untuk convert PPTX → PDF
   ```bash
-  ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
+  soffice --headless --convert-to pdf --outdir temp/pdf/ input.pptx
   ```
-- Video per page disimpan di `temp/slide_videos/`
+- **PDF**: Copy file PDF ke `temp/pdf/input.pdf`
 
-### 5. Concatenate Videos
-- Menggunakan FFmpeg concat demuxer
-- Gabungkan semua video menjadi `output/output.mp4`
+### 2. Extract Text dari PDF
+- Menggunakan `PyPDF2` untuk membaca file PDF
+- Ekstraksi teks dari setiap page untuk TTS
+- Jika page tidak ada teks, akan generate default narration "Slide N"
 
----
-
-### For PPTX Files:
-
-### 1. Ekstraksi Teks dan Gambar
-- Menggunakan `python-pptx` untuk membaca file PPTX
-- Ekstraksi teks dari setiap shape di slide
-- Ekstraksi gambar (jika ada) dan simpan di `temp/slides/`
-
-### 2. Ekstraksi Background dan Render Text (python-pptx method)
-- **Ekstraksi Background Dinamis**:
-  - Ekstrak background (warna solid atau gambar) dari setiap slide
-  - Fallback ke background putih jika tidak ada background
-  - Setiap slide dapat memiliki background yang berbeda
-- **Render Text**:
-  - Overlay text shapes di atas background menggunakan Pillow
-  - Text wrapping otomatis sesuai lebar shape
-  - Font dan ukuran disesuaikan dengan posisi shape
-
-### 3. Generate PNG untuk Setiap Slide
-- **Metode 1** (jika LibreOffice tersedia):
-  - PPTX → PDF → PNG menggunakan LibreOffice headless
-  - Resolusi tinggi (300 DPI)
-  - Rendering akurat dengan background dan format asli
-- **Metode 2** (fallback - python-pptx + Pillow):
-  - Ekstrak background dari slide
-  - Render text shapes di atas background
-  - Resolusi 1920x1080
-  - PNG disimpan di `temp/slides/`
+### 3. Extract RAW PNG dari PDF
+- Menggunakan `pdftoppm` untuk convert setiap page ke PNG
+  ```bash
+  pdftoppm -png -r 300 temp/pdf/input.pdf temp/slides/slide
+  ```
+- Resolusi tinggi (300 DPI) untuk kualitas maksimal
+- PNG adalah representasi RAW dari slide tanpa modifikasi
+- Output: `slide-1.png`, `slide-2.png`, etc.
 
 ### 4. Generate Audio (TTS)
 - Menggunakan `gTTS` untuk convert teks ke MP3
-- Audio disimpan di `temp/audio/`
-- Jika slide tidak ada teks, generate audio default "Slide N"
+- Audio disimpan di `temp/audio/` dengan nama yang match dengan PNG
+- Output: `slide-1.mp3`, `slide-2.mp3`, etc.
+- Jika gTTS gagal (offline), generate silent audio sebagai fallback
 
-### 5. Combine Slide + Audio
-- Slide PNG sudah berisi background dan text yang ter-render
-- Menggunakan FFmpeg untuk menggabungkan slide dengan audio:
+### 5. Combine PNG + Audio
+- Menggunakan FFmpeg untuk menggabungkan slide PNG dengan audio:
   ```bash
-  ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
+  ffmpeg -loop 1 -i slide-1.png -i slide-1.mp3 \
+         -c:v libx264 -shortest -pix_fmt yuv420p slide-1.mp4
   ```
 - Video per slide disimpan di `temp/slide_videos/`
 
 ### 6. Concatenate Videos
-- Menggunakan FFmpeg concat demuxer
+- Membuat file list: `temp/slides_list.txt`
+  ```
+  file '/absolute/path/to/slide-1.mp4'
+  file '/absolute/path/to/slide-2.mp4'
+  ...
+  ```
+- Menggunakan FFmpeg concat demuxer:
+  ```bash
+  ffmpeg -f concat -safe 0 -i slides_list.txt -c copy output/output.mp4
+  ```
 - Gabungkan semua video menjadi `output/output.mp4`
 
 ## Troubleshooting
@@ -245,19 +241,24 @@ ERROR: FFmpeg is not installed or not in PATH
 ```
 **Solution**: Install FFmpeg dan pastikan ada di system PATH
 
-### LibreOffice warning
+### pdftoppm not found
 ```
-WARNING: LibreOffice not found. Will use python-pptx for slide rendering.
+ERROR: pdftoppm is not installed or not in PATH
 ```
-**Note**: Ini hanya warning. Script akan tetap berjalan menggunakan fallback method.
-Untuk hasil lebih baik, install LibreOffice.
+**Solution**: Install poppler-utils (`sudo apt install poppler-utils` atau `brew install poppler`)
+
+### LibreOffice not found (untuk PPTX)
+```
+ERROR: LibreOffice not found. Required for PPTX to PDF conversion.
+```
+**Solution**: Install LibreOffice untuk konversi PPTX. PDF files tidak memerlukan LibreOffice.
 
 ### No audio generated
 Jika gTTS gagal (misalnya karena masalah koneksi internet), script akan generate silent audio sebagai fallback.
 
-### Low quality slide images
-Jika menggunakan fallback method (tanpa LibreOffice), kualitas gambar slide akan lebih rendah.
-**Solution**: Install LibreOffice dan pdftoppm untuk hasil terbaik.
+### File naming mismatch
+PNG files menggunakan format `slide-1.png`, `slide-2.png`, etc. (sesuai output pdftoppm).
+Audio dan video files otomatis match dengan format yang sama.
 
 ## Perbandingan dengan Implementasi TypeScript
 
@@ -266,11 +267,14 @@ Implementasi Python ini adalah alternatif dari implementasi TypeScript yang ada:
 | Fitur | TypeScript (existing) | Python (new) |
 |-------|----------------------|--------------|
 | TTS Engine | ElevenLabs API (berbayar) | gTTS (gratis) |
-| Slide Rendering | LibreOffice + pdftoppm | LibreOffice + pdftoppm atau Pillow |
+| Slide Rendering | LibreOffice + pdftoppm | LibreOffice + pdftoppm |
+| PNG Extraction | RAW dari PDF | RAW dari PDF |
 | Dependencies | Node.js, npm | Python, pip |
 | Audio Quality | Tinggi (ElevenLabs) | Sedang (Google TTS) |
 | Cost | Memerlukan API key | Gratis |
 | Internet | Perlu (untuk TTS) | Perlu (untuk TTS) |
+| PPTX Support | Via PDF | Via PDF (required LibreOffice) |
+| PDF Support | Direct | Direct |
 
 ## Examples
 
