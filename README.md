@@ -1,22 +1,107 @@
 # ppt-auto-vo
 
-Pipeline: PPTX + INSTRUKSI.txt -> (LibreOffice headless) PDF -> (pdftoppm) PNG per slide -> (ElevenLabs) TTS per slide -> (FFmpeg) render scene per slide -> concat -> output/output.mp4.
+Automated pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) dengan voiceover.
 
-Requirements:
+## Two Implementations Available
+
+### 1. Python Implementation (NEW) ⭐ Recommended for Beginners
+
+**Pipeline:** PPTX → Extract text & images → Generate PNG slides → TTS with gTTS → Combine with FFmpeg → output.mp4
+
+**Features:**
+- ✅ Free TTS using Google Text-to-Speech (gTTS)
+- ✅ No API key required
+- ✅ Simple Python setup
+- ✅ Automatic fallback to silent audio if offline
+
+**Requirements:**
+- Python 3.8+
+- FFmpeg
+- LibreOffice (optional, for better slide rendering)
+- Poppler/pdftoppm (optional)
+
+**Quick Start:**
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run pipeline
+python3 pptx_to_video.py
+
+# Or use the helper script
+./run_pipeline.sh
+```
+
+**Documentation:** See [README_PYTHON.md](README_PYTHON.md) for detailed documentation.
+
+---
+
+### 2. TypeScript Implementation (Original)
+
+**Pipeline:** PPTX + INSTRUKSI.txt → (LibreOffice) PDF → (pdftoppm) PNG → (ElevenLabs API) TTS → (FFmpeg) render → output.mp4
+
+**Features:**
+- ✅ High-quality TTS using ElevenLabs API
+- ✅ Multi-voice support
+- ✅ Watch mode for development
+
+**Requirements:**
 - Node.js 18+
 - FFmpeg (ffmpeg + ffprobe)
 - LibreOffice (soffice)
 - Poppler (pdftoppm)
+- ElevenLabs API key (paid)
 
-Setup:
-1) npm i
-2) Copy .env.example to .env
-3) Put input/slides.pptx and input/INSTRUKSI.txt
+**Setup:**
+```bash
+npm i
+cp .env.example .env
+# Edit .env and add your ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID
+```
 
-Run:
-- npm run build
-- npm run watch
+**Run:**
+```bash
+npm run build    # One-time build
+npm run watch    # Watch mode for development
+```
 
-Output:
-- output/output.mp4
-- cache/ for cache files
+---
+
+## Output
+
+Both implementations produce:
+- **Final video:** `output/output.mp4`
+- **Intermediate files:** `cache/` (TypeScript) or `temp/` (Python)
+
+## Folder Structure
+
+```
+project-root/
+├── input/
+│   ├── slides.pptx          # Your PowerPoint file
+│   └── INSTRUKSI.txt         # (Optional) Instructions
+├── output/
+│   └── output.mp4            # Final video output
+├── temp/                     # Python implementation cache
+│   ├── slides/              # PNG slides
+│   ├── audio/               # MP3 audio files
+│   └── videos/              # Per-slide videos
+├── cache/                    # TypeScript implementation cache
+├── pptx_to_video.py         # Python implementation
+├── run_pipeline.sh          # Python helper script
+└── src/                     # TypeScript implementation
+```
+
+## Which Implementation to Use?
+
+**Choose Python if:**
+- You want a free solution (no API costs)
+- You prefer Python
+- You don't need high-quality voice synthesis
+- You want simpler setup
+
+**Choose TypeScript if:**
+- You need professional-quality voiceover
+- You have an ElevenLabs API key
+- You're already familiar with Node.js
+- You need watch mode for iterative development
