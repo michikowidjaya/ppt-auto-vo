@@ -43,7 +43,7 @@ class PPTXToVideoConverter:
         # Create subdirectories
         self.slides_dir = self.temp_dir / "slides"
         self.audio_dir = self.temp_dir / "audio"
-        self.videos_dir = self.temp_dir / "videos"
+        self.videos_dir = self.temp_dir / "slide_videos"
         
         # Ensure directories exist
         for directory in [self.output_dir, self.temp_dir, self.slides_dir, 

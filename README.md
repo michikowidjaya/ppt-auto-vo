@@ -96,7 +96,7 @@ project-root/
 ├── temp/                     # Python implementation cache
 │   ├── slides/              # PNG slides
 │   ├── audio/               # MP3 audio files
-│   └── videos/              # Per-slide videos
+│   └── slide_videos/        # Per-slide videos
 ├── cache/                    # TypeScript implementation cache
 ├── pptx_to_video.py         # Python implementation
 ├── run_pipeline.sh          # Python helper script
