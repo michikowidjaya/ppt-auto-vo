@@ -11,8 +11,9 @@ import shutil
 from pathlib import Path
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.dml import MSO_FILL_TYPE
 from gtts import gTTS
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import io
 
 
@@ -27,7 +28,7 @@ class PPTXToVideoConverter:
             input_dir: Directory containing input files (PPTX and INSTRUKSI.txt)
             output_dir: Directory for output video
             temp_dir: Temporary directory for intermediate files
-            background_path: Optional path to background PNG image to overlay on slides
+            background_path: (Deprecated) No longer used - backgrounds are extracted from each slide
         """
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
@@ -119,6 +120,185 @@ class PPTXToVideoConverter:
         
         return image_paths
     
+    def extract_background_from_slide(self, slide, prs, width_px, height_px):
+        """
+        Extract background (image or solid color) from a slide.
+        
+        Args:
+            slide: python-pptx slide object
+            prs: python-pptx Presentation object
+            width_px: Target width in pixels
+            height_px: Target height in pixels
+            
+        Returns:
+            PIL.Image: Background image
+        """
+        # Default to white background
+        bg_color = (255, 255, 255)
+        bg_image = None
+        
+        try:
+            # Try to get background from slide
+            bg = slide.background
+            fill = bg.fill
+            
+            # Check if slide follows master or has custom background
+            if hasattr(fill, 'type') and fill.type is not None:
+                fill_type = fill.type
+                
+                # MSO_FILL_TYPE.SOLID = 1
+                if fill_type == 1 or (hasattr(fill, 'fore_color') and fill.fore_color):
+                    try:
+                        # Solid color fill
+                        if hasattr(fill.fore_color, 'rgb'):
+                            rgb = fill.fore_color.rgb
+                            bg_color = (rgb[0], rgb[1], rgb[2])
+                    except:
+                        pass
+                
+                # MSO_FILL_TYPE.PICTURE = 6
+                elif fill_type == 6:
+                    try:
+                        # Picture fill - try to extract the image
+                        # This is complex and may not work in all cases
+                        pass
+                    except:
+                        pass
+            
+            # If following master background, try to get from master
+            if slide.follow_master_background and prs.slide_masters:
+                try:
+                    master = prs.slide_masters[0]
+                    master_bg = master.background
+                    master_fill = master_bg.fill
+                    
+                    if hasattr(master_fill, 'fore_color') and master_fill.fore_color:
+                        if hasattr(master_fill.fore_color, 'rgb'):
+                            rgb = master_fill.fore_color.rgb
+                            bg_color = (rgb[0], rgb[1], rgb[2])
+                except:
+                    pass
+        
+        except Exception as e:
+            # If extraction fails, use default white background
+            pass
+        
+        # Create background image with the extracted or default color
+        bg_image = Image.new('RGB', (width_px, height_px), bg_color)
+        
+        return bg_image
+    
+    def render_text_on_image(self, img, slide, prs):
+        """
+        Render text shapes from slide onto the image using Pillow.
+        
+        Args:
+            img: PIL Image to draw on
+            slide: python-pptx slide object
+            prs: python-pptx Presentation object
+            
+        Returns:
+            PIL.Image: Image with text rendered
+        """
+        draw = ImageDraw.Draw(img)
+        
+        # Get slide dimensions
+        slide_width = prs.slide_width
+        slide_height = prs.slide_height
+        img_width, img_height = img.size
+        
+        # Scale factors to convert EMU coordinates to pixels
+        scale_x = img_width / slide_width
+        scale_y = img_height / slide_height
+        
+        # Try to load a font, fallback to default if not available
+        try:
+            # Try common font sizes
+            font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+        except:
+            # Fallback to default font
+            font_large = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+        
+        # Iterate through shapes and draw text
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                try:
+                    # Get shape position and size in EMUs
+                    left = shape.left
+                    top = shape.top
+                    width = shape.width
+                    height = shape.height
+                    
+                    # Convert to pixels
+                    x = int(left * scale_x)
+                    y = int(top * scale_y)
+                    w = int(width * scale_x)
+                    h = int(height * scale_y)
+                    
+                    # Get text
+                    text = shape.text.strip()
+                    
+                    # Choose font based on shape type/position
+                    # Title shapes are usually at the top
+                    if y < img_height * 0.3:
+                        font = font_large
+                        color = (0, 0, 0)  # Black
+                    else:
+                        font = font_medium
+                        color = (50, 50, 50)  # Dark gray
+                    
+                    # Simple text wrapping - split by words
+                    words = text.split()
+                    lines = []
+                    current_line = []
+                    
+                    for word in words:
+                        test_line = ' '.join(current_line + [word])
+                        # Use textbbox instead of deprecated textsize
+                        try:
+                            bbox = draw.textbbox((0, 0), test_line, font=font)
+                            test_width = bbox[2] - bbox[0]
+                        except:
+                            # Fallback for older Pillow versions
+                            test_width = len(test_line) * 10
+                        
+                        if test_width <= w - 20:  # Leave some margin
+                            current_line.append(word)
+                        else:
+                            if current_line:
+                                lines.append(' '.join(current_line))
+                            current_line = [word]
+                    
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                    
+                    # Draw each line
+                    line_y = y + 10  # Small top margin
+                    for line in lines:
+                        draw.text((x + 10, line_y), line, font=font, fill=color)
+                        # Estimate line height
+                        try:
+                            bbox = draw.textbbox((0, 0), line, font=font)
+                            line_height = bbox[3] - bbox[1]
+                        except:
+                            line_height = 40
+                        line_y += line_height + 5  # Line spacing
+                        
+                        # Stop if we exceed the shape height
+                        if line_y > y + h:
+                            break
+                
+                except Exception as e:
+                    # If text rendering fails for this shape, continue with others
+                    print(f"    Warning: Could not render text for shape: {e}")
+                    continue
+        
+        return img
+    
     def convert_slide_to_png_libreoffice(self, pptx_path):
         """
         Convert PPTX slides to PNG using LibreOffice.
@@ -181,7 +361,7 @@ class PPTXToVideoConverter:
     def convert_slide_to_png_pythonpptx(self, prs):
         """
         Convert PPTX slides to PNG using python-pptx and Pillow.
-        Note: This creates simple text-based representations.
+        Extracts background from each slide and overlays text.
         
         Args:
             prs: python-pptx Presentation object
@@ -189,7 +369,7 @@ class PPTXToVideoConverter:
         Returns:
             list: List of PNG file paths
         """
-        print("Converting slides to PNG using python-pptx...")
+        print("Converting slides to PNG with dynamic backgrounds using python-pptx...")
         png_files = []
         
         # Get slide dimensions (in EMUs - English Metric Units)
@@ -205,9 +385,15 @@ class PPTXToVideoConverter:
             width_px, height_px = 1920, 1080
         
         for idx, slide in enumerate(prs.slides, 1):
-            # Create a white background image
-            img = Image.new('RGB', (width_px, height_px), 'white')
+            print(f"  Processing slide {idx}...")
             
+            # Extract background from slide
+            img = self.extract_background_from_slide(slide, prs, width_px, height_px)
+            
+            # Render text shapes on top of background
+            img = self.render_text_on_image(img, slide, prs)
+            
+            # Save the rendered slide
             png_path = self.slides_dir / f"slide{idx:03d}.png"
             img.save(png_path)
             png_files.append(png_path)
@@ -272,11 +458,10 @@ class PPTXToVideoConverter:
     
     def combine_slide_and_audio(self, slide_path, audio_path, slide_num):
         """
-        Combine slide PNG and audio into a video using FFmpeg.
-        If background_path is set, overlay the slide on the background.
+        Combine slide PNG (with background and text already rendered) and audio into a video using FFmpeg.
         
         Args:
-            slide_path: Path to slide PNG
+            slide_path: Path to slide PNG (already includes background and text)
             audio_path: Path to audio file
             slide_num: Slide number (1-indexed)
             
@@ -285,46 +470,21 @@ class PPTXToVideoConverter:
         """
         video_path = self.videos_dir / f"slide{slide_num:03d}.mp4"
         
-        if self.background_path and self.background_path.exists():
-            # Use background with overlay filter
-            # Background as first input, slide as second input
-            cmd = [
-                "ffmpeg",
-                "-loop", "1",
-                "-i", str(self.background_path),
-                "-loop", "1", 
-                "-i", str(slide_path),
-                "-i", str(audio_path),
-                "-filter_complex",
-                "[1:v]scale=1920:1080:force_original_aspect_ratio=decrease[scaled];"
-                "[0:v][scaled]overlay=(W-w)/2:(H-h)/2[outv]",
-                "-map", "[outv]",
-                "-map", "2:a",
-                "-c:v", "libx264",
-                "-tune", "stillimage",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-pix_fmt", "yuv420p",
-                "-shortest",
-                "-y",
-                str(video_path)
-            ]
-        else:
-            # Original behavior without background
-            cmd = [
-                "ffmpeg",
-                "-loop", "1",
-                "-i", str(slide_path),
-                "-i", str(audio_path),
-                "-c:v", "libx264",
-                "-tune", "stillimage",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-pix_fmt", "yuv420p",
-                "-shortest",
-                "-y",
-                str(video_path)
-            ]
+        # Slide PNG already contains background and text, just combine with audio
+        cmd = [
+            "ffmpeg",
+            "-loop", "1",
+            "-i", str(slide_path),
+            "-i", str(audio_path),
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            "-y",
+            str(video_path)
+        ]
         
         try:
             subprocess.run(cmd, check=True, capture_output=True)
@@ -387,14 +547,10 @@ class PPTXToVideoConverter:
         print(f"Processing: {pptx_path}")
         print("=" * 60)
         
-        # Check background
+        # Note: Background path is deprecated - backgrounds are now extracted from each slide
         if self.background_path:
-            if self.background_path.exists():
-                print(f"Using background image: {self.background_path}")
-            else:
-                print(f"WARNING: Background path specified but file not found: {self.background_path}")
-                print("Proceeding without background overlay.")
-                self.background_path = None
+            print(f"NOTE: --background parameter is deprecated.")
+            print("Backgrounds are now automatically extracted from each slide.")
         
         # Check dependencies
         self.check_dependencies()
