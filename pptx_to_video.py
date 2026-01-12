@@ -501,8 +501,6 @@ class PPTXToVideoConverter:
         except Exception as e:
             print(f"Error extracting text from PDF: {e}")
             return []
-        
-        return png_files
     
     def generate_audio_for_slide(self, text, slide_num, language='en'):
         """
