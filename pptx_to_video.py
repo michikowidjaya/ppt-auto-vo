@@ -147,22 +147,23 @@ class PPTXToVideoConverter:
                 fill_type = fill.type
                 
                 # MSO_FILL_TYPE.SOLID = 1
-                if fill_type == 1 or (hasattr(fill, 'fore_color') and fill.fore_color):
+                if fill_type == MSO_FILL_TYPE.SOLID or (hasattr(fill, 'fore_color') and fill.fore_color):
                     try:
                         # Solid color fill
                         if hasattr(fill.fore_color, 'rgb'):
                             rgb = fill.fore_color.rgb
                             bg_color = (rgb[0], rgb[1], rgb[2])
-                    except:
+                    except Exception as e:
+                        # If color extraction fails, use default
                         pass
                 
                 # MSO_FILL_TYPE.PICTURE = 6
-                elif fill_type == 6:
+                elif fill_type == MSO_FILL_TYPE.PICTURE:
                     try:
                         # Picture fill - try to extract the image
                         # This is complex and may not work in all cases
                         pass
-                    except:
+                    except Exception as e:
                         pass
             
             # If following master background, try to get from master
@@ -176,7 +177,8 @@ class PPTXToVideoConverter:
                         if hasattr(master_fill.fore_color, 'rgb'):
                             rgb = master_fill.fore_color.rgb
                             bg_color = (rgb[0], rgb[1], rgb[2])
-                except:
+                except Exception as e:
+                    # Master background extraction failed, use default
                     pass
         
         except Exception as e:
@@ -213,10 +215,31 @@ class PPTXToVideoConverter:
         
         # Try to load a font, fallback to default if not available
         try:
-            # Try common font sizes
-            font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
-            font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+            # Try common font paths for different operating systems
+            font_paths = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux (Debian/Ubuntu)
+                "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",  # Linux (RHEL/Fedora)
+                "C:\\Windows\\Fonts\\arialbd.ttf",  # Windows
+                "/Library/Fonts/Arial Bold.ttf",  # macOS
+                "/System/Library/Fonts/Helvetica.ttc",  # macOS fallback
+            ]
+            
+            font_large = None
+            for font_path in font_paths:
+                try:
+                    font_large = ImageFont.truetype(font_path, 48)
+                    # If successful, use the same font family for other sizes
+                    base_font_path = font_path.replace("-Bold", "").replace("bd", "")
+                    font_medium = ImageFont.truetype(base_font_path, 32)
+                    font_small = ImageFont.truetype(base_font_path, 24)
+                    break
+                except:
+                    continue
+            
+            # If no font found, use default
+            if font_large is None:
+                raise Exception("No TrueType font found")
+                
         except:
             # Fallback to default font
             font_large = ImageFont.load_default()
