@@ -201,33 +201,6 @@ class PPTXToVideoConverter:
             print(f"Error extracting text from PDF: {e}")
             return []
     
-    def generate_audio_for_slide(self, text, slide_num, language='en'):
-        """
-        Generate audio for slide text using gTTS.
-        
-        Args:
-            text: Text to convert to speech
-            slide_num: Slide number (1-indexed)
-            language: Language code (default: 'en')
-            
-        Returns:
-            Path: Path to generated audio file
-        """
-        audio_path = self.audio_dir / f"slide-{slide_num}.mp3"
-        
-        if not text or text.strip() == "":
-            text = f"Slide {slide_num}"
-        
-        try:
-            tts = gTTS(text=text, lang=language, slow=False)
-            tts.save(str(audio_path))
-            print(f"  Generated audio: {audio_path.name}")
-            return audio_path
-        except Exception as e:
-            print(f"  Error generating audio: {e}")
-            # Create a silent audio file as fallback
-            return self.create_silent_audio(audio_path)
-    
     def create_silent_audio(self, audio_path, duration=2.0):
         """
         Create a silent audio file using FFmpeg.
@@ -255,42 +228,6 @@ class PPTXToVideoConverter:
             return audio_path
         except subprocess.CalledProcessError:
             return None
-    
-    def combine_slide_and_audio(self, slide_path, audio_path, slide_num):
-        """
-        Combine RAW PNG slide image and audio into a video using FFmpeg.
-        Uses the exact FFmpeg command from problem statement.
-        
-        Args:
-            slide_path: Path to RAW PNG slide image
-            audio_path: Path to audio file (MP3)
-            slide_num: Slide number (1-indexed)
-            
-        Returns:
-            Path: Path to generated video file
-        """
-        video_path = self.videos_dir / f"slide-{slide_num}.mp4"
-        
-        # FFmpeg command as specified in problem statement
-        cmd = [
-            "ffmpeg",
-            "-loop", "1",
-            "-i", str(slide_path),
-            "-i", str(audio_path),
-            "-c:v", "libx264",
-            "-shortest",
-            "-pix_fmt", "yuv420p",
-            "-y",
-            str(video_path)
-        ]
-        
-        try:
-            subprocess.run(cmd, check=True, capture_output=True)
-            print(f"  Created video: {video_path.name}")
-            return video_path
-        except subprocess.CalledProcessError as e:
-            print(f"  ERROR: Failed to create video: {e}")
-            sys.exit(1)
     
     def concatenate_videos(self, video_paths):
         """
@@ -390,9 +327,31 @@ class PPTXToVideoConverter:
         # Step 4: Generate audio for each slide
         print("\n4. Generating TTS audio for each slide...")
         audio_files = []
-        for idx, text in enumerate(slide_texts, 1):
+        for idx, (png_path, text) in enumerate(zip(png_files, slide_texts), 1):
+            # Extract slide number from PNG filename (e.g., slide-01.png -> 01)
+            png_name = png_path.stem  # Gets "slide-01" from "slide-01.png"
+            slide_suffix = png_name.split('-')[-1]  # Gets "01" from "slide-01"
+            
             print(f"   Slide {idx}:")
-            audio_path = self.generate_audio_for_slide(text, idx, language)
+            # Generate audio with the same suffix as the PNG
+            audio_path = self.audio_dir / f"slide-{slide_suffix}.mp3"
+            
+            if not text or text.strip() == "":
+                text = f"Slide {idx}"
+            
+            # Generate or create silent audio
+            if not audio_path.exists():
+                try:
+                    tts = gTTS(text=text, lang=language, slow=False)
+                    tts.save(str(audio_path))
+                    print(f"  Generated audio: {audio_path.name}")
+                except Exception as e:
+                    print(f"  Error generating audio: {e}")
+                    # Create a silent audio file as fallback
+                    audio_path = self.create_silent_audio(audio_path)
+            else:
+                print(f"  Using existing audio: {audio_path.name}")
+            
             audio_files.append(audio_path)
         
         if len(audio_files) != len(png_files):
@@ -402,10 +361,34 @@ class PPTXToVideoConverter:
         # Step 5: Combine PNG and audio into individual videos
         print("\n5. Creating individual slide videos...")
         video_files = []
-        for idx, (png_path, audio_path) in enumerate(zip(png_files, audio_files), 1):
-            print(f"   Slide {idx}:")
-            video_path = self.combine_slide_and_audio(png_path, audio_path, idx)
-            video_files.append(video_path)
+        for png_path, audio_path in zip(png_files, audio_files):
+            # Extract slide suffix from PNG for consistent naming
+            png_name = png_path.stem
+            slide_suffix = png_name.split('-')[-1]
+            print(f"   Processing {png_name}...")
+            
+            video_path = self.videos_dir / f"slide-{slide_suffix}.mp4"
+            
+            # FFmpeg command as specified in problem statement
+            cmd = [
+                "ffmpeg",
+                "-loop", "1",
+                "-i", str(png_path),
+                "-i", str(audio_path),
+                "-c:v", "libx264",
+                "-shortest",
+                "-pix_fmt", "yuv420p",
+                "-y",
+                str(video_path)
+            ]
+            
+            try:
+                subprocess.run(cmd, check=True, capture_output=True)
+                print(f"  Created video: {video_path.name}")
+                video_files.append(video_path)
+            except subprocess.CalledProcessError as e:
+                print(f"  ERROR: Failed to create video: {e}")
+                sys.exit(1)
         
         # Step 6: Concatenate all videos into final output
         print("\n6. Concatenating all slide videos into final output...")
