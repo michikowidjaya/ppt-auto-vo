@@ -135,7 +135,6 @@ class PPTXToVideoConverter:
         """
         # Default to white background
         bg_color = (255, 255, 255)
-        bg_image = None
         
         try:
             # Try to get background from slide
@@ -152,7 +151,7 @@ class PPTXToVideoConverter:
                         if hasattr(fill.fore_color, 'rgb'):
                             rgb = fill.fore_color.rgb
                             bg_color = (rgb[0], rgb[1], rgb[2])
-                    except Exception as e:
+                    except Exception:
                         # If color extraction fails, use default
                         pass
                 
@@ -172,11 +171,11 @@ class PPTXToVideoConverter:
                         if hasattr(master_fill.fore_color, 'rgb'):
                             rgb = master_fill.fore_color.rgb
                             bg_color = (rgb[0], rgb[1], rgb[2])
-                except Exception as e:
+                except Exception:
                     # Master background extraction failed, use default
                     pass
         
-        except Exception as e:
+        except Exception:
             # If extraction fails, use default white background
             pass
         
@@ -211,7 +210,6 @@ class PPTXToVideoConverter:
         # Try to load a font, fallback to default if not available
         font_large = None
         font_medium = None
-        font_small = None
         
         try:
             # Try common font paths for different operating systems
@@ -242,7 +240,6 @@ class PPTXToVideoConverter:
                 try:
                     font_large = ImageFont.truetype(config['bold'], 48)
                     font_medium = ImageFont.truetype(config['regular'], 32)
-                    font_small = ImageFont.truetype(config['regular'], 24)
                     break
                 except (OSError, IOError):
                     continue
@@ -255,7 +252,6 @@ class PPTXToVideoConverter:
             # Fallback to default font
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small = ImageFont.load_default()
         
         # Iterate through shapes and draw text
         for shape in slide.shapes:
