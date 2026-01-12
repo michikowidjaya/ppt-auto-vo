@@ -13,6 +13,7 @@ Automated pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) den
 - ✅ No API key required
 - ✅ Simple Python setup
 - ✅ Automatic fallback to silent audio if offline
+- ✅ **Background PNG overlay** - Add custom background to every slide
 
 **Requirements:**
 - Python 3.8+
@@ -44,6 +45,7 @@ python3 pptx_to_video.py
 - ✅ High-quality TTS using ElevenLabs API
 - ✅ Multi-voice support
 - ✅ Watch mode for development
+- ✅ **Background PNG overlay** - Add custom background to every slide
 
 **Requirements:**
 - Node.js 18+
@@ -57,6 +59,7 @@ python3 pptx_to_video.py
 npm i
 cp .env.example .env
 # Edit .env and add your ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID
+# Optionally add BACKGROUND_PATH for custom background image
 ```
 
 **Run:**
@@ -79,6 +82,7 @@ Both implementations produce:
 project-root/
 ├── input/
 │   ├── slides.pptx          # Your PowerPoint file
+│   ├── background.png        # (Optional) Default background image
 │   └── INSTRUKSI.txt         # (Optional) Instructions
 ├── output/
 │   └── output.mp4            # Final video output

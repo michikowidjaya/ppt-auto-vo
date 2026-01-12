@@ -8,6 +8,7 @@ Implementasi pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) 
 - ✅ Ekstraksi gambar dari slide (jika ada)
 - ✅ Konversi slide ke format PNG
 - ✅ Generate audio voiceover menggunakan Google TTS (`gTTS`)
+- ✅ **Background PNG overlay** - Tambahkan background kustom pada setiap slide
 - ✅ Gabungkan slide dan audio menjadi video per slide
 - ✅ Konsolidasikan semua video menjadi satu file output MP4
 
@@ -128,6 +129,9 @@ python pptx_to_video.py --pptx my-presentation.pptx
 # Use Indonesian language for TTS
 python pptx_to_video.py --language id
 
+# Use a custom background image
+python pptx_to_video.py --background input/background.png
+
 # Clean temporary files before processing
 python pptx_to_video.py --clean
 
@@ -146,6 +150,7 @@ python pptx_to_video.py --help
   - `id`: Indonesian
   - `es`: Spanish
   - dll. (lihat [gTTS supported languages](https://gtts.readthedocs.io/en/latest/module.html#languages-gtts-lang))
+- `--background`, `-b`: Path to background PNG image to overlay on slides (default: `None`)
 - `--clean`: Clean temporary directory before processing
 
 ## Pipeline Flow
@@ -168,9 +173,16 @@ python pptx_to_video.py --help
 - Audio disimpan di `temp/audio/`
 - Jika slide tidak ada teks, generate audio default "Slide N"
 
-### 4. Combine Slide + Audio
-- Menggunakan FFmpeg command:
+### 4. Combine Slide + Audio (with optional Background)
+- Jika background PNG disediakan, FFmpeg akan overlay slide di atas background
+- Menggunakan FFmpeg filter_complex untuk composite:
   ```bash
+  # With background
+  ffmpeg -loop 1 -i background.png -loop 1 -i slide.png -i audio.mp3 \
+    -filter_complex "[1:v]scale=1920:1080[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2" \
+    -c:v libx264 -shortest output.mp4
+  
+  # Without background (default)
   ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
   ```
 - Video per slide disimpan di `temp/videos/`
