@@ -6,14 +6,15 @@ Automated pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) den
 
 ### 1. Python Implementation (NEW) ⭐ Recommended for Beginners
 
-**Pipeline:** PPTX → Extract text & images → Generate PNG slides → TTS with gTTS → Combine with FFmpeg → output.mp4
+**Pipeline:** PPTX → Extract text & backgrounds → Generate PNG slides with dynamic backgrounds → TTS with gTTS → Combine with FFmpeg → output.mp4
 
 **Features:**
 - ✅ Free TTS using Google Text-to-Speech (gTTS)
 - ✅ No API key required
 - ✅ Simple Python setup
 - ✅ Automatic fallback to silent audio if offline
-- ✅ **Background PNG overlay** - Add custom background to every slide
+- ✅ **Dynamic background extraction** - Extract and use background from each slide
+- ✅ **Text overlay rendering** - Render text shapes on backgrounds using Pillow
 
 **Requirements:**
 - Python 3.8+

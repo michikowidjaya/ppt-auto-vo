@@ -6,9 +6,10 @@ Implementasi pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) 
 
 - ✅ Ekstraksi teks dari setiap slide menggunakan `python-pptx`
 - ✅ Ekstraksi gambar dari slide (jika ada)
-- ✅ Konversi slide ke format PNG
+- ✅ **Ekstraksi background dinamis** - Ekstrak background (warna atau gambar) dari setiap slide
+- ✅ **Render teks di atas background** - Overlay teks shapes pada background menggunakan Pillow
+- ✅ Konversi slide ke format PNG dengan background per-slide
 - ✅ Generate audio voiceover menggunakan Google TTS (`gTTS`)
-- ✅ **Background PNG overlay** - Tambahkan background kustom pada setiap slide
 - ✅ Gabungkan slide dan audio menjadi video per slide
 - ✅ Konsolidasikan semua video menjadi satu file output MP4
 
@@ -129,9 +130,6 @@ python pptx_to_video.py --pptx my-presentation.pptx
 # Use Indonesian language for TTS
 python pptx_to_video.py --language id
 
-# Use a custom background image
-python pptx_to_video.py --background input/background.png
-
 # Clean temporary files before processing
 python pptx_to_video.py --clean
 
@@ -150,7 +148,7 @@ python pptx_to_video.py --help
   - `id`: Indonesian
   - `es`: Spanish
   - dll. (lihat [gTTS supported languages](https://gtts.readthedocs.io/en/latest/module.html#languages-gtts-lang))
-- `--background`, `-b`: Path to background PNG image to overlay on slides (default: `None`)
+- `--background`, `-b`: **(Deprecated)** No longer used - backgrounds are now extracted from each slide
 - `--clean`: Clean temporary directory before processing
 
 ## Pipeline Flow
@@ -160,34 +158,41 @@ python pptx_to_video.py --help
 - Ekstraksi teks dari setiap shape di slide
 - Ekstraksi gambar (jika ada) dan simpan di `temp/slides/`
 
-### 2. Generate PNG untuk Setiap Slide
+### 2. Ekstraksi Background dan Render Text (python-pptx method)
+- **Ekstraksi Background Dinamis**:
+  - Ekstrak background (warna solid atau gambar) dari setiap slide
+  - Fallback ke background putih jika tidak ada background
+  - Setiap slide dapat memiliki background yang berbeda
+- **Render Text**:
+  - Overlay text shapes di atas background menggunakan Pillow
+  - Text wrapping otomatis sesuai lebar shape
+  - Font dan ukuran disesuaikan dengan posisi shape
+
+### 3. Generate PNG untuk Setiap Slide
 - **Metode 1** (jika LibreOffice tersedia):
   - PPTX → PDF → PNG menggunakan LibreOffice headless
   - Resolusi tinggi (300 DPI)
-- **Metode 2** (fallback):
-  - Generate simple PNG menggunakan Pillow
+  - Rendering akurat dengan background dan format asli
+- **Metode 2** (fallback - python-pptx + Pillow):
+  - Ekstrak background dari slide
+  - Render text shapes di atas background
   - Resolusi 1920x1080
+  - PNG disimpan di `temp/slides/`
 
-### 3. Generate Audio (TTS)
+### 4. Generate Audio (TTS)
 - Menggunakan `gTTS` untuk convert teks ke MP3
 - Audio disimpan di `temp/audio/`
 - Jika slide tidak ada teks, generate audio default "Slide N"
 
-### 4. Combine Slide + Audio (with optional Background)
-- Jika background PNG disediakan, FFmpeg akan overlay slide di atas background
-- Menggunakan FFmpeg filter_complex untuk composite:
+### 5. Combine Slide + Audio
+- Slide PNG sudah berisi background dan text yang ter-render
+- Menggunakan FFmpeg untuk menggabungkan slide dengan audio:
   ```bash
-  # With background
-  ffmpeg -loop 1 -i background.png -loop 1 -i slide.png -i audio.mp3 \
-    -filter_complex "[1:v]scale=1920:1080[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2" \
-    -c:v libx264 -shortest output.mp4
-  
-  # Without background (default)
   ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
   ```
 - Video per slide disimpan di `temp/videos/`
 
-### 5. Concatenate Videos
+### 6. Concatenate Videos
 - Menggunakan FFmpeg concat demuxer
 - Gabungkan semua video menjadi `output/output.mp4`
 
