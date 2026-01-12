@@ -1,11 +1,22 @@
-export interface SlideItem {
-  index: number;
-  imagePath: string;
-  audioPath?: string;
-}
+export type SlideScript = {
+  slideIndex: number;
+  bullets: string[];
+  narration: string;
+};
 
-export interface Manifest {
-  slides: string[];
-  audio: string[];
-  scenes: string[];
-}
+export type BuildConfig = {
+  inputDir: string;
+  outputDir: string;
+  cacheDir: string;
+  pptxPath: string;
+  instruksiPath: string;
+  sofficePath?: string;
+  pdftoppmPath?: string;
+  ffmpegPath?: string;
+  ffprobePath?: string;
+  elevenApiKey: string;
+  elevenVoiceId: string;
+  width: number;
+  height: number;
+  fps: number;
+};
