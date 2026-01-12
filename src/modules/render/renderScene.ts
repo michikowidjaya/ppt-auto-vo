@@ -77,6 +77,7 @@ export const renderScene = async ({
       "yuv420p",
       "-c:a",
       "aac",
+      "-shortest",
       outScenePath
     ];
   } else {
