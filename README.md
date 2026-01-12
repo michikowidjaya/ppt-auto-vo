@@ -6,7 +6,7 @@ Automated pipeline untuk mengonversi file PPTX atau PDF menjadi video slideshow 
 
 ### 1. Python Implementation (NEW) ⭐ Recommended for Beginners
 
-**Pipeline:** PPTX/PDF → Extract text & backgrounds → Generate PNG slides → TTS with gTTS → Combine with FFmpeg → output.mp4
+**Pipeline:** PPTX/PDF → PDF → RAW PNG (via pdftoppm) → TTS with gTTS → Combine with FFmpeg → output.mp4
 
 **Features:**
 - ✅ Free TTS using Google Text-to-Speech (gTTS)
@@ -14,26 +14,32 @@ Automated pipeline untuk mengonversi file PPTX atau PDF menjadi video slideshow 
 - ✅ Simple Python setup
 - ✅ Automatic fallback to silent audio if offline
 - ✅ **Support for PDF files** - Convert PDF documents directly to video
-- ✅ **Support for PPTX files** - Convert PowerPoint presentations to video
-- ✅ **Dynamic background extraction** - Extract and use background from each slide (PPTX only)
-- ✅ **Text overlay rendering** - Render text shapes on backgrounds using Pillow (PPTX only)
+- ✅ **Support for PPTX files** - Convert PowerPoint presentations to video via PDF
+- ✅ **RAW PNG extraction** - Extract unmodified slide images directly from PDF using pdftoppm
+- ✅ **Consistent pipeline** - Both PPTX and PDF follow the same PDF → PNG → Video path
 
 **Requirements:**
 - Python 3.8+
-- FFmpeg
-- pdftoppm (poppler-utils) - required for PDF conversion
-- LibreOffice (optional, for better PPTX slide rendering)
+- FFmpeg (required)
+- pdftoppm / poppler-utils (required)
+- LibreOffice (required for PPTX files)
 
 **Quick Start:**
 ```bash
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
+# Install system dependencies (Ubuntu/Debian)
+sudo apt install ffmpeg poppler-utils libreoffice
+
+# Install system dependencies (macOS)
+brew install ffmpeg poppler libreoffice
+
 # Run pipeline with PPTX
-python3 pptx_to_video.py
+python3 pptx_to_video.py --file slides.pptx
 
 # Run pipeline with PDF
-python3 pptx_to_video.py --file Tugas.pdf
+python3 pptx_to_video.py --file document.pdf
 
 # Or use the helper script
 ./run_pipeline.sh
@@ -88,15 +94,17 @@ Both implementations produce:
 project-root/
 ├── input/
 │   ├── slides.pptx          # Your PowerPoint file
-│   ├── Tugas.pdf             # Or your PDF file
-│   ├── background.png        # (Optional) Default background image
+│   ├── document.pdf          # Or your PDF file
 │   └── INSTRUKSI.txt         # (Optional) Instructions
 ├── output/
 │   └── output.mp4            # Final video output
 ├── temp/                     # Python implementation cache
-│   ├── slides/              # PNG slides
-│   ├── audio/               # MP3 audio files
-│   └── slide_videos/        # Per-slide videos
+│   ├── pdf/
+│   │   └── input.pdf        # PDF source (converted from PPTX or copied from input)
+│   ├── slides/              # RAW PNG slides (slide-1.png, slide-2.png, ...)
+│   ├── audio/               # MP3 audio files (slide-1.mp3, slide-2.mp3, ...)
+│   ├── slide_videos/        # Per-slide videos (slide-1.mp4, slide-2.mp4, ...)
+│   └── slides_list.txt      # Concatenation list for FFmpeg
 ├── cache/                    # TypeScript implementation cache
 ├── pptx_to_video.py         # Python implementation
 ├── run_pipeline.sh          # Python helper script
