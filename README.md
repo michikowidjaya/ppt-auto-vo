@@ -1,34 +1,39 @@
 # ppt-auto-vo
 
-Automated pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) dengan voiceover.
+Automated pipeline untuk mengonversi file PPTX atau PDF menjadi video slideshow (MP4) dengan voiceover.
 
 ## Two Implementations Available
 
 ### 1. Python Implementation (NEW) ⭐ Recommended for Beginners
 
-**Pipeline:** PPTX → Extract text & backgrounds → Generate PNG slides with dynamic backgrounds → TTS with gTTS → Combine with FFmpeg → output.mp4
+**Pipeline:** PPTX/PDF → Extract text & backgrounds → Generate PNG slides → TTS with gTTS → Combine with FFmpeg → output.mp4
 
 **Features:**
 - ✅ Free TTS using Google Text-to-Speech (gTTS)
 - ✅ No API key required
 - ✅ Simple Python setup
 - ✅ Automatic fallback to silent audio if offline
-- ✅ **Dynamic background extraction** - Extract and use background from each slide
-- ✅ **Text overlay rendering** - Render text shapes on backgrounds using Pillow
+- ✅ **Support for PDF files** - Convert PDF documents directly to video
+- ✅ **Support for PPTX files** - Convert PowerPoint presentations to video
+- ✅ **Dynamic background extraction** - Extract and use background from each slide (PPTX only)
+- ✅ **Text overlay rendering** - Render text shapes on backgrounds using Pillow (PPTX only)
 
 **Requirements:**
 - Python 3.8+
 - FFmpeg
-- LibreOffice (optional, for better slide rendering)
-- Poppler/pdftoppm (optional)
+- pdftoppm (poppler-utils) - required for PDF conversion
+- LibreOffice (optional, for better PPTX slide rendering)
 
 **Quick Start:**
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run pipeline
+# Run pipeline with PPTX
 python3 pptx_to_video.py
+
+# Run pipeline with PDF
+python3 pptx_to_video.py --file Tugas.pdf
 
 # Or use the helper script
 ./run_pipeline.sh
@@ -83,6 +88,7 @@ Both implementations produce:
 project-root/
 ├── input/
 │   ├── slides.pptx          # Your PowerPoint file
+│   ├── Tugas.pdf             # Or your PDF file
 │   ├── background.png        # (Optional) Default background image
 │   └── INSTRUKSI.txt         # (Optional) Instructions
 ├── output/

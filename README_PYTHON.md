@@ -1,14 +1,16 @@
-# Python PPTX to Video Pipeline
+# Python PPTX/PDF to Video Pipeline
 
-Implementasi pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) dengan voiceover menggunakan Python.
+Implementasi pipeline untuk mengonversi file PPTX atau PDF menjadi video slideshow (MP4) dengan voiceover menggunakan Python.
 
 ## Fitur
 
-- ✅ Ekstraksi teks dari setiap slide menggunakan `python-pptx`
-- ✅ Ekstraksi gambar dari slide (jika ada)
-- ✅ **Ekstraksi background dinamis** - Ekstrak background (warna atau gambar) dari setiap slide
-- ✅ **Render teks di atas background** - Overlay teks shapes pada background menggunakan Pillow
-- ✅ Konversi slide ke format PNG dengan background per-slide
+- ✅ **Support PDF** - Konversi file PDF menjadi video dengan voiceover
+- ✅ **Support PPTX** - Konversi presentasi PowerPoint menjadi video
+- ✅ Ekstraksi teks dari setiap slide/page menggunakan `python-pptx` atau `PyPDF2`
+- ✅ Ekstraksi gambar dari slide (jika ada, untuk PPTX)
+- ✅ **Ekstraksi background dinamis** - Ekstrak background (warna atau gambar) dari setiap slide (untuk PPTX)
+- ✅ **Render teks di atas background** - Overlay teks shapes pada background menggunakan Pillow (untuk PPTX)
+- ✅ Konversi slide/page ke format PNG
 - ✅ Generate audio voiceover menggunakan Google TTS (`gTTS`)
 - ✅ Gabungkan slide dan audio menjadi video per slide
 - ✅ Konsolidasikan semua video menjadi satu file output MP4
@@ -30,22 +32,22 @@ Implementasi pipeline untuk mengonversi file PPTX menjadi video slideshow (MP4) 
    # Download dari https://ffmpeg.org/download.html
    ```
 
-3. **LibreOffice** (opsional, untuk rendering slide yang lebih baik)
-   ```bash
-   # Ubuntu/Debian
-   sudo apt install libreoffice
-   
-   # macOS
-   brew install --cask libreoffice
-   ```
-
-4. **pdftoppm** (opsional, bagian dari Poppler)
+3. **pdftoppm (Poppler)** - **REQUIRED** untuk konversi PDF
    ```bash
    # Ubuntu/Debian
    sudo apt install poppler-utils
    
    # macOS
    brew install poppler
+   ```
+
+4. **LibreOffice** (opsional, untuk rendering PPTX slide yang lebih baik)
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install libreoffice
+   
+   # macOS
+   brew install --cask libreoffice
    ```
 
 ### Python Dependencies
@@ -58,6 +60,7 @@ pip install -r requirements.txt
 
 Dependencies yang dibutuhkan:
 - `python-pptx`: untuk parsing dan ekstraksi PPTX
+- `PyPDF2`: untuk ekstraksi teks dari PDF
 - `gTTS`: untuk text-to-speech (Google TTS)
 - `Pillow`: untuk manipulasi gambar
 
@@ -84,7 +87,8 @@ Dependencies yang dibutuhkan:
 ```
 project-root/
 ├── input/
-│   ├── slides.pptx          # File PPTX input
+│   ├── slides.pptx          # File PPTX input (atau)
+│   ├── Tugas.pdf             # File PDF input
 │   └── INSTRUKSI.txt         # (opsional) instruksi tambahan
 ├── temp/                     # Folder sementara (auto-generated)
 │   ├── slides/
@@ -110,12 +114,16 @@ project-root/
 ### Basic Usage
 
 ```bash
+# Process PPTX file (default)
 python pptx_to_video.py
+
+# Process PDF file
+python pptx_to_video.py --file Tugas.pdf
 ```
 
 Script akan:
-1. Membaca `input/slides.pptx`
-2. Memproses semua slide
+1. Membaca file dari direktori `input/`
+2. Memproses semua slide/pages
 3. Generate video output di `output/output.mp4`
 
 ### Advanced Options
@@ -124,11 +132,12 @@ Script akan:
 # Specify custom input/output directories
 python pptx_to_video.py --input ./my-input --output ./my-output
 
-# Specify custom PPTX file name
-python pptx_to_video.py --pptx my-presentation.pptx
+# Specify custom file name (PPTX or PDF)
+python pptx_to_video.py --file my-presentation.pptx
+python pptx_to_video.py --file Tugas.pdf
 
 # Use Indonesian language for TTS
-python pptx_to_video.py --language id
+python pptx_to_video.py --file Tugas.pdf --language id
 
 # Clean temporary files before processing
 python pptx_to_video.py --clean
@@ -142,16 +151,48 @@ python pptx_to_video.py --help
 - `--input`, `-i`: Input directory (default: `input`)
 - `--output`, `-o`: Output directory (default: `output`)
 - `--temp`, `-t`: Temporary directory (default: `temp`)
-- `--pptx`, `-p`: PPTX filename (default: `slides.pptx`)
+- `--file`, `-f`: PPTX or PDF filename (default: `slides.pptx`)
+- `--pptx`, `-p`: **(Deprecated)** Use `--file` instead
 - `--language`, `-l`: TTS language code (default: `en`)
   - `en`: English
   - `id`: Indonesian
   - `es`: Spanish
   - dll. (lihat [gTTS supported languages](https://gtts.readthedocs.io/en/latest/module.html#languages-gtts-lang))
-- `--background`, `-b`: **(Deprecated)** No longer used - backgrounds are now extracted from each slide
+- `--background`, `-b`: **(Deprecated)** No longer used - backgrounds are now extracted from each slide (PPTX only)
 - `--clean`: Clean temporary directory before processing
 
 ## Pipeline Flow
+
+### For PDF Files:
+
+### 1. Ekstraksi Teks dari PDF
+- Menggunakan `PyPDF2` untuk membaca file PDF
+- Ekstraksi teks dari setiap page
+
+### 2. Konversi PDF ke PNG
+- Menggunakan `pdftoppm` untuk convert setiap page ke PNG
+- Resolusi tinggi (300 DPI)
+- PNG disimpan di `temp/slides/`
+
+### 3. Generate Audio (TTS)
+- Menggunakan `gTTS` untuk convert teks ke MP3
+- Audio disimpan di `temp/audio/`
+- Jika page tidak ada teks, generate audio default "Page N"
+
+### 4. Combine Page PNG + Audio
+- Menggunakan FFmpeg untuk menggabungkan page PNG dengan audio:
+  ```bash
+  ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
+  ```
+- Video per page disimpan di `temp/videos/`
+
+### 5. Concatenate Videos
+- Menggunakan FFmpeg concat demuxer
+- Gabungkan semua video menjadi `output/output.mp4`
+
+---
+
+### For PPTX Files:
 
 ### 1. Ekstraksi Teks dan Gambar
 - Menggunakan `python-pptx` untuk membaca file PPTX
@@ -233,25 +274,32 @@ Implementasi Python ini adalah alternatif dari implementasi TypeScript yang ada:
 
 ## Examples
 
-### Example 1: Basic Presentation
+### Example 1: Basic PPTX Presentation
 ```bash
 # Buat file input/slides.pptx dengan beberapa slide
 python pptx_to_video.py
 # Output: output/output.mp4
 ```
 
-### Example 2: Indonesian Presentation
+### Example 2: PDF Document
+```bash
+# Konversi file PDF dengan voiceover
+python pptx_to_video.py --file Tugas.pdf --language id
+# Output: output/output.mp4
+```
+
+### Example 3: Indonesian Presentation
 ```bash
 # Untuk presentasi dalam Bahasa Indonesia
 python pptx_to_video.py --language id
 ```
 
-### Example 3: Custom Paths
+### Example 4: Custom Paths
 ```bash
 # Gunakan custom directories
 python pptx_to_video.py \
   --input ./presentations \
-  --pptx my-slides.pptx \
+  --file my-slides.pptx \
   --output ./videos \
   --language id
 ```

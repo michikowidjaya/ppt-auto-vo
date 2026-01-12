@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PPTX to Video Pipeline
-Converts PowerPoint presentations to MP4 video slideshows with voiceover.
+PPTX/PDF to Video Pipeline
+Converts PowerPoint presentations or PDF files to MP4 video slideshows with voiceover.
 """
 
 import os
@@ -15,17 +15,22 @@ from pptx.enum.dml import MSO_FILL_TYPE
 from gtts import gTTS
 from PIL import Image, ImageDraw, ImageFont
 import io
+try:
+    from PyPDF2 import PdfReader
+    HAS_PYPDF2 = True
+except ImportError:
+    HAS_PYPDF2 = False
 
 
 class PPTXToVideoConverter:
-    """Main converter class for PPTX to MP4 pipeline."""
+    """Main converter class for PPTX/PDF to MP4 pipeline."""
     
     def __init__(self, input_dir="input", output_dir="output", temp_dir="temp", background_path=None):
         """
         Initialize the converter.
         
         Args:
-            input_dir: Directory containing input files (PPTX and INSTRUKSI.txt)
+            input_dir: Directory containing input files (PPTX/PDF and INSTRUKSI.txt)
             output_dir: Directory for output video
             temp_dir: Temporary directory for intermediate files
             background_path: (Deprecated) No longer used - backgrounds are extracted from each slide
@@ -431,6 +436,74 @@ class PPTXToVideoConverter:
         
         return png_files
     
+    def convert_pdf_to_png(self, pdf_path):
+        """
+        Convert PDF pages to PNG using pdftoppm.
+        
+        Args:
+            pdf_path: Path to PDF file
+            
+        Returns:
+            list: List of PNG file paths
+        """
+        print("Converting PDF to PNG using pdftoppm...")
+        
+        try:
+            cmd = [
+                "pdftoppm",
+                "-png",
+                "-r", "300",
+                str(pdf_path),
+                str(self.slides_dir / "slide")
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+            
+            # Get list of generated PNGs
+            png_files = sorted(self.slides_dir.glob("slide-*.png"))
+            
+            # Rename to our format (slide001.png, slide002.png, etc.)
+            renamed_files = []
+            for idx, png_file in enumerate(png_files, 1):
+                new_name = self.slides_dir / f"slide{idx:03d}.png"
+                png_file.rename(new_name)
+                renamed_files.append(new_name)
+            
+            print(f"  Converted {len(renamed_files)} pages to PNG")
+            return renamed_files
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Error converting PDF to PNG: {e}")
+            print("Make sure pdftoppm (poppler-utils) is installed")
+            return None
+    
+    def extract_text_from_pdf(self, pdf_path):
+        """
+        Extract text from PDF pages.
+        
+        Args:
+            pdf_path: Path to PDF file
+            
+        Returns:
+            list: List of text content per page
+        """
+        if not HAS_PYPDF2:
+            print("Warning: PyPDF2 not installed. Cannot extract text from PDF.")
+            print("Install with: pip install PyPDF2")
+            return []
+        
+        try:
+            reader = PdfReader(str(pdf_path))
+            texts = []
+            for page_num, page in enumerate(reader.pages, 1):
+                text = page.extract_text().strip()
+                texts.append(text)
+                print(f"  Page {page_num}: {text[:100]}..." if len(text) > 100 else f"  Page {page_num}: {text}")
+            return texts
+        except Exception as e:
+            print(f"Error extracting text from PDF: {e}")
+            return []
+        
+        return png_files
+    
     def generate_audio_for_slide(self, text, slide_num, language='en'):
         """
         Generate audio for slide text using gTTS.
@@ -560,24 +633,35 @@ class PPTXToVideoConverter:
             print(f"Error concatenating videos: {e}")
             return None
     
-    def process(self, pptx_filename="slides.pptx", language='en'):
+    def process(self, input_filename="slides.pptx", language='en'):
         """
-        Main processing pipeline.
+        Main processing pipeline for PPTX or PDF files.
         
         Args:
-            pptx_filename: Name of PPTX file in input directory
+            input_filename: Name of PPTX or PDF file in input directory
             language: Language code for TTS (default: 'en')
         """
-        pptx_path = self.input_dir / pptx_filename
+        input_path = self.input_dir / input_filename
         
-        if not pptx_path.exists():
-            print(f"ERROR: PPTX file not found: {pptx_path}")
+        if not input_path.exists():
+            print(f"ERROR: Input file not found: {input_path}")
             sys.exit(1)
         
-        print(f"Processing: {pptx_path}")
+        # Determine file type
+        file_ext = input_path.suffix.lower()
+        is_pdf = file_ext == '.pdf'
+        is_pptx = file_ext in ['.pptx', '.ppt']
+        
+        if not is_pdf and not is_pptx:
+            print(f"ERROR: Unsupported file type: {file_ext}")
+            print("Supported formats: .pptx, .ppt, .pdf")
+            sys.exit(1)
+        
+        print(f"Processing: {input_path}")
+        print(f"File type: {'PDF' if is_pdf else 'PPTX'}")
         print("=" * 60)
         
-        # Note: Background path is deprecated - backgrounds are now extracted from each slide
+        # Note: Background path is deprecated
         if self.background_path:
             print(f"NOTE: --background parameter is deprecated.")
             print("Backgrounds are now automatically extracted from each slide.")
@@ -585,36 +669,59 @@ class PPTXToVideoConverter:
         # Check dependencies
         self.check_dependencies()
         
-        # Load presentation
-        print("\n1. Loading PPTX...")
-        prs = Presentation(str(pptx_path))
-        num_slides = len(prs.slides)
-        print(f"   Found {num_slides} slides")
-        
-        # Extract text and images from all slides
-        print("\n2. Extracting text and images from slides...")
-        slide_texts = []
-        for idx, slide in enumerate(prs.slides, 1):
-            print(f"\n   Slide {idx}:")
-            text = self.extract_text_from_slide(slide)
-            slide_texts.append(text)
-            print(f"   Text: {text[:100]}..." if len(text) > 100 else f"   Text: {text}")
+        # Process based on file type
+        if is_pdf:
+            # PDF Processing Pipeline
+            print("\n1. Loading PDF...")
             
-            # Extract images (optional)
-            images = self.extract_images_from_slide(slide, idx)
+            # Extract text from PDF
+            print("\n2. Extracting text from PDF pages...")
+            slide_texts = self.extract_text_from_pdf(input_path)
+            
+            # Convert PDF to PNG
+            print("\n3. Converting PDF pages to PNG images...")
+            png_files = self.convert_pdf_to_png(input_path)
+            
+            if not png_files:
+                print("ERROR: Failed to convert PDF to PNG")
+                sys.exit(1)
+            
+            # If we couldn't extract text, use default text
+            if not slide_texts or len(slide_texts) != len(png_files):
+                print("Warning: Could not extract text from all pages. Using default narration.")
+                slide_texts = [f"Page {i}" for i in range(1, len(png_files) + 1)]
         
-        # Convert slides to PNG
-        print("\n3. Converting slides to PNG images...")
-        if self.has_libreoffice:
-            png_files = self.convert_slide_to_png_libreoffice(pptx_path)
-            if png_files is None:
-                png_files = self.convert_slide_to_png_pythonpptx(prs)
         else:
-            png_files = self.convert_slide_to_png_pythonpptx(prs)
-        
-        if not png_files:
-            print("ERROR: Failed to convert slides to PNG")
-            sys.exit(1)
+            # PPTX Processing Pipeline
+            print("\n1. Loading PPTX...")
+            prs = Presentation(str(input_path))
+            num_slides = len(prs.slides)
+            print(f"   Found {num_slides} slides")
+            
+            # Extract text and images from all slides
+            print("\n2. Extracting text and images from slides...")
+            slide_texts = []
+            for idx, slide in enumerate(prs.slides, 1):
+                print(f"\n   Slide {idx}:")
+                text = self.extract_text_from_slide(slide)
+                slide_texts.append(text)
+                print(f"   Text: {text[:100]}..." if len(text) > 100 else f"   Text: {text}")
+                
+                # Extract images (optional)
+                images = self.extract_images_from_slide(slide, idx)
+            
+            # Convert slides to PNG
+            print("\n3. Converting slides to PNG images...")
+            if self.has_libreoffice:
+                png_files = self.convert_slide_to_png_libreoffice(input_path)
+                if png_files is None:
+                    png_files = self.convert_slide_to_png_pythonpptx(prs)
+            else:
+                png_files = self.convert_slide_to_png_pythonpptx(prs)
+            
+            if not png_files:
+                print("ERROR: Failed to convert slides to PNG")
+                sys.exit(1)
         
         # Generate audio for each slide
         print("\n4. Generating audio (TTS) for each slide...")
@@ -662,12 +769,12 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Convert PPTX presentations to MP4 video slideshows"
+        description="Convert PPTX presentations or PDF files to MP4 video slideshows"
     )
     parser.add_argument(
         "--input", "-i",
         default="input",
-        help="Input directory containing PPTX file (default: input)"
+        help="Input directory containing PPTX or PDF file (default: input)"
     )
     parser.add_argument(
         "--output", "-o",
@@ -680,9 +787,15 @@ def main():
         help="Temporary directory for intermediate files (default: temp)"
     )
     parser.add_argument(
-        "--pptx", "-p",
+        "--file", "-f",
         default="slides.pptx",
-        help="Name of PPTX file in input directory (default: slides.pptx)"
+        help="Name of PPTX or PDF file in input directory (default: slides.pptx)"
+    )
+    # Keep --pptx for backward compatibility
+    parser.add_argument(
+        "--pptx", "-p",
+        default=None,
+        help="(Deprecated: use --file) Name of PPTX file in input directory"
     )
     parser.add_argument(
         "--language", "-l",
@@ -702,6 +815,9 @@ def main():
     
     args = parser.parse_args()
     
+    # Use --pptx if provided for backward compatibility, otherwise use --file
+    input_file = args.pptx if args.pptx else args.file
+    
     # Clean temp directory if requested
     if args.clean:
         temp_path = Path(args.temp)
@@ -717,7 +833,7 @@ def main():
         background_path=args.background
     )
     
-    converter.process(pptx_filename=args.pptx, language=args.language)
+    converter.process(input_filename=input_file, language=args.language)
 
 
 if __name__ == "__main__":
