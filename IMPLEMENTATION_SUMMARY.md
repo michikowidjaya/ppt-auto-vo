@@ -62,7 +62,7 @@ output/
 temp/
 ├── slides/              # PNG dari setiap halaman/slide
 ├── audio/               # MP3 audio untuk setiap halaman/slide
-└── videos/              # Video per halaman/slide
+└── slide_videos/        # Video per halaman/slide
 ```
 
 ### Instalasi Dependencies

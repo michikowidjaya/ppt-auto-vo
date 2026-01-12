@@ -99,7 +99,7 @@ project-root/
 │   │   ├── slide001.mp3
 │   │   ├── slide002.mp3
 │   │   └── ...
-│   └── videos/
+│   └── slide_videos/
 │       ├── slide001.mp4
 │       ├── slide002.mp4
 │       └── ...
@@ -184,7 +184,7 @@ python pptx_to_video.py --help
   ```bash
   ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
   ```
-- Video per page disimpan di `temp/videos/`
+- Video per page disimpan di `temp/slide_videos/`
 
 ### 5. Concatenate Videos
 - Menggunakan FFmpeg concat demuxer
@@ -231,7 +231,7 @@ python pptx_to_video.py --help
   ```bash
   ffmpeg -loop 1 -i slide.png -i audio.mp3 -c:v libx264 -shortest output.mp4
   ```
-- Video per slide disimpan di `temp/videos/`
+- Video per slide disimpan di `temp/slide_videos/`
 
 ### 6. Concatenate Videos
 - Menggunakan FFmpeg concat demuxer
