@@ -10,6 +10,7 @@ export type BuildConfig = {
   cacheDir: string;
   pptxPath: string;
   instruksiPath: string;
+  backgroundPath?: string;
   sofficePath?: string;
   pdftoppmPath?: string;
   ffmpegPath?: string;

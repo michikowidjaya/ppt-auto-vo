@@ -19,7 +19,7 @@ import io
 class PPTXToVideoConverter:
     """Main converter class for PPTX to MP4 pipeline."""
     
-    def __init__(self, input_dir="input", output_dir="output", temp_dir="temp"):
+    def __init__(self, input_dir="input", output_dir="output", temp_dir="temp", background_path=None):
         """
         Initialize the converter.
         
@@ -27,10 +27,12 @@ class PPTXToVideoConverter:
             input_dir: Directory containing input files (PPTX and INSTRUKSI.txt)
             output_dir: Directory for output video
             temp_dir: Temporary directory for intermediate files
+            background_path: Optional path to background PNG image to overlay on slides
         """
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.temp_dir = Path(temp_dir)
+        self.background_path = Path(background_path) if background_path else None
         
         # Create subdirectories
         self.slides_dir = self.temp_dir / "slides"
@@ -271,6 +273,7 @@ class PPTXToVideoConverter:
     def combine_slide_and_audio(self, slide_path, audio_path, slide_num):
         """
         Combine slide PNG and audio into a video using FFmpeg.
+        If background_path is set, overlay the slide on the background.
         
         Args:
             slide_path: Path to slide PNG
@@ -282,20 +285,46 @@ class PPTXToVideoConverter:
         """
         video_path = self.videos_dir / f"slide{slide_num:03d}.mp4"
         
-        cmd = [
-            "ffmpeg",
-            "-loop", "1",
-            "-i", str(slide_path),
-            "-i", str(audio_path),
-            "-c:v", "libx264",
-            "-tune", "stillimage",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-pix_fmt", "yuv420p",
-            "-shortest",
-            "-y",
-            str(video_path)
-        ]
+        if self.background_path and self.background_path.exists():
+            # Use background with overlay filter
+            # Background as first input, slide as second input
+            cmd = [
+                "ffmpeg",
+                "-loop", "1",
+                "-i", str(self.background_path),
+                "-loop", "1", 
+                "-i", str(slide_path),
+                "-i", str(audio_path),
+                "-filter_complex",
+                "[1:v]scale=1920:1080:force_original_aspect_ratio=decrease[scaled];"
+                "[0:v][scaled]overlay=(W-w)/2:(H-h)/2[outv]",
+                "-map", "[outv]",
+                "-map", "2:a",
+                "-c:v", "libx264",
+                "-tune", "stillimage",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                "-shortest",
+                "-y",
+                str(video_path)
+            ]
+        else:
+            # Original behavior without background
+            cmd = [
+                "ffmpeg",
+                "-loop", "1",
+                "-i", str(slide_path),
+                "-i", str(audio_path),
+                "-c:v", "libx264",
+                "-tune", "stillimage",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                "-shortest",
+                "-y",
+                str(video_path)
+            ]
         
         try:
             subprocess.run(cmd, check=True, capture_output=True)
@@ -357,6 +386,15 @@ class PPTXToVideoConverter:
         
         print(f"Processing: {pptx_path}")
         print("=" * 60)
+        
+        # Check background
+        if self.background_path:
+            if self.background_path.exists():
+                print(f"Using background image: {self.background_path}")
+            else:
+                print(f"WARNING: Background path specified but file not found: {self.background_path}")
+                print("Proceeding without background overlay.")
+                self.background_path = None
         
         # Check dependencies
         self.check_dependencies()
@@ -466,6 +504,11 @@ def main():
         help="Language code for TTS (default: en, use 'id' for Indonesian)"
     )
     parser.add_argument(
+        "--background", "-b",
+        default=None,
+        help="Path to background PNG image to overlay on slides (default: None)"
+    )
+    parser.add_argument(
         "--clean",
         action="store_true",
         help="Clean temporary directory before processing"
@@ -484,7 +527,8 @@ def main():
     converter = PPTXToVideoConverter(
         input_dir=args.input,
         output_dir=args.output,
-        temp_dir=args.temp
+        temp_dir=args.temp,
+        background_path=args.background
     )
     
     converter.process(pptx_filename=args.pptx, language=args.language)

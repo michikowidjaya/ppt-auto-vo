@@ -78,6 +78,7 @@ export const runBuild = async (cfg: BuildConfig): Promise<void> => {
       width: cfg.width,
       height: cfg.height,
       fps: cfg.fps,
+      backgroundPath: cfg.backgroundPath,
       ffmpegPath: cfg.ffmpegPath ?? "ffmpeg",
       ffprobePath: cfg.ffprobePath ?? "ffprobe"
     });

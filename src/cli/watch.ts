@@ -30,6 +30,7 @@ const cfg: BuildConfig = {
   cacheDir,
   pptxPath: path.join(inputDir, "slides.pptx"),
   instruksiPath: path.join(inputDir, "INSTRUKSI.txt"),
+  backgroundPath: optionalEnv("BACKGROUND_PATH"),
   sofficePath: optionalEnv("SOFFICE_PATH"),
   pdftoppmPath: optionalEnv("PDFTOPPM_PATH"),
   ffmpegPath: optionalEnv("FFMPEG_PATH"),
