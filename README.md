@@ -124,3 +124,21 @@ project-root/
 - You have an ElevenLabs API key
 - You're already familiar with Node.js
 - You need watch mode for iterative development
+
+## Streamlit Frontend
+
+You can run a lightweight Streamlit UI to upload/select input files and run the Python pipeline from a browser.
+
+1. Install dependencies (already included in `requirements.txt`):
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Start the app:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+The app exposes an uploader (or lets you pick files from `input/`), a language setting, and a run button. After the pipeline completes it will show logs and let you preview/download `output/output.mp4`.
