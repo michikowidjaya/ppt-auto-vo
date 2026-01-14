@@ -304,15 +304,32 @@ class PPTXToVideoConverter:
             
             cmd = [
                 "ffmpeg", "-loop", "1", "-i", str(png_path),
-                "-i", str(audio_path), "-c:v", "libx264",
-                "-shortest", "-pix_fmt", "yuv420p", "-y", str(video_path)
+                "-i", str(audio_path), 
+                "-c:v", "libx264",
+                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", # Memastikan lebar/tinggi genap
+                "-tune", "stillimage",
+                "-shortest", 
+                "-pix_fmt", "yuv420p", 
+                "-y", str(video_path)
             ]
             
             try:
                 subprocess.run(cmd, check=True, capture_output=True)
                 video_files.append(video_path)
             except subprocess.CalledProcessError as e:
-                print(f"  ERROR: Failed to create video: {e}")
+                print(f"  ERROR: Failed to create video. Return code: {e.returncode}")
+                try:
+                    stderr = e.stderr.decode('utf-8', errors='replace') if e.stderr else ''
+                    stdout = e.stdout.decode('utf-8', errors='replace') if e.stdout else ''
+                    if stderr:
+                        print("  ---- FFmpeg stderr ----")
+                        print(stderr)
+                    if stdout:
+                        print("  ---- FFmpeg stdout ----")
+                        print(stdout)
+                except Exception:
+                    pass
+                print(f"  Command: {' '.join(cmd)}")
                 sys.exit(1)
         
         # Step 6: Concatenate

@@ -16,3 +16,6 @@ __pycache__/
 dist/
 build/
 venv/
+*.dll
+*.exe
+*.msi
