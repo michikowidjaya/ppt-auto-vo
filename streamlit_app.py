@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 import streamlit as st
+import sys
 
 
 ROOT = Path(__file__).parent
@@ -29,13 +30,15 @@ def save_uploaded(uploaded_file):
 
 
 def run_pipeline(filename: str, language: str, clean: bool):
-    cmd = ["python", "pptx_to_video.py", "--file", filename, "--output", "output", "--language", language]
+    cmd = [sys.executable, "-u", str(ROOT / "pptx_to_video.py"), "--file", filename, "--output", "output", "--language", language]
     if clean:
         cmd.append("--clean")
 
-    # Run process and capture output
+    # Run process and capture output (non-streaming fallback)
     proc = subprocess.run(cmd, capture_output=True, text=True)
-    return proc.returncode, proc.stdout, proc.stderr
+    out = proc.stdout or ""
+    err = proc.stderr or ""
+    return proc.returncode, out, err
 
 
 def main():
@@ -61,8 +64,30 @@ def main():
 
     if st.sidebar.button("Run Pipeline"):
         st.info(f"Running pipeline on {selected} (lang={language})")
+        log_box = st.empty()
+        progress = st.empty()
         with st.spinner("Processing... this may take a while"):
-            code, out, err = run_pipeline(selected, language, clean)
+            # Stream subprocess output live
+            cmd = [sys.executable, "-u", str(ROOT / "pptx_to_video.py"), "--file", selected, "--output", "output", "--language", language]
+            if clean:
+                cmd.append("--clean")
+
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            lines = []
+            try:
+                for raw in proc.stdout:
+                    line = raw.rstrip()
+                    lines.append(line)
+                    # Keep last N lines to avoid huge UI
+                    last = "\n".join(lines[-1000:])
+                    log_box.code(last)
+            except Exception as e:
+                lines.append(f"[streaming error] {e}")
+                log_box.code("\n".join(lines[-1000:]))
+            proc.wait()
+            code = proc.returncode
+            out = "\n".join(lines)
+            err = ""
 
         st.subheader("Process Output")
         if out:
